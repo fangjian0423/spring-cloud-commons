@@ -16,9 +16,13 @@
 
 package org.springframework.cloud.loadbalancer.annotation;
 
+import java.util.List;
+
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.ConditionalOnBlockingDiscoveryEnabled;
 import org.springframework.cloud.client.ConditionalOnDiscoveryEnabled;
@@ -31,10 +35,12 @@ import org.springframework.cloud.loadbalancer.core.CachingServiceInstanceListSup
 import org.springframework.cloud.loadbalancer.core.CachingServiceInstanceSupplier;
 import org.springframework.cloud.loadbalancer.core.DiscoveryClientServiceInstanceListSupplier;
 import org.springframework.cloud.loadbalancer.core.DiscoveryClientServiceInstanceSupplier;
+import org.springframework.cloud.loadbalancer.core.LoadBalancerFilter;
 import org.springframework.cloud.loadbalancer.core.ReactorLoadBalancer;
 import org.springframework.cloud.loadbalancer.core.RoundRobinLoadBalancer;
 import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.cloud.loadbalancer.core.ServiceInstanceSupplier;
+import org.springframework.cloud.loadbalancer.core.ZonePreferenceLoadBalancerFilter;
 import org.springframework.cloud.loadbalancer.support.LoadBalancerClientFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -58,10 +64,22 @@ public class LoadBalancerClientConfiguration {
 	@ConditionalOnMissingBean
 	public ReactorLoadBalancer<ServiceInstance> reactorServiceInstanceLoadBalancer(
 			Environment environment,
-			LoadBalancerClientFactory loadBalancerClientFactory) {
+			LoadBalancerClientFactory loadBalancerClientFactory,
+			@Autowired(required = false) List<LoadBalancerFilter> filters) {
 		String name = environment.getProperty(LoadBalancerClientFactory.PROPERTY_NAME);
 		return new RoundRobinLoadBalancer(loadBalancerClientFactory.getLazyProvider(name,
-				ServiceInstanceListSupplier.class), name);
+				ServiceInstanceListSupplier.class), name, filters);
+	}
+
+	@Configuration
+	@ConditionalOnProperty(value = "spring.cloud.loadbalancer.preferSameZone", matchIfMissing = true)
+	protected static class ZonePreferenceConfiguration {
+
+		@Bean
+		ZonePreferenceLoadBalancerFilter zonePreferenceLoadBalancerFilter(@Autowired Environment environment) {
+			return new ZonePreferenceLoadBalancerFilter(environment);
+		}
+
 	}
 
 	@Configuration(proxyBeanMethods = false)

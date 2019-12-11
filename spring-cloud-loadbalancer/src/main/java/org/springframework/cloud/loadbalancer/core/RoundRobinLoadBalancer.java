@@ -43,6 +43,8 @@ public class RoundRobinLoadBalancer implements ReactorServiceInstanceLoadBalance
 
 	private final AtomicInteger position;
 
+	private List<LoadBalancerFilter> filters;
+
 	@Deprecated
 	private ObjectProvider<ServiceInstanceSupplier> serviceInstanceSupplier;
 
@@ -87,6 +89,12 @@ public class RoundRobinLoadBalancer implements ReactorServiceInstanceLoadBalance
 		this.position = new AtomicInteger(seedPosition);
 	}
 
+
+	public RoundRobinLoadBalancer(ObjectProvider<ServiceInstanceListSupplier> lazyProvider, String name, List<LoadBalancerFilter> filters) {
+		this(lazyProvider, name);
+		this.filters = filters;
+	}
+
 	/**
 	 * @param serviceId id of the service for which to choose an instance
 	 * @param serviceInstanceSupplier a provider of {@link ServiceInstanceSupplier} that
@@ -127,12 +135,23 @@ public class RoundRobinLoadBalancer implements ReactorServiceInstanceLoadBalance
 			log.warn("No servers available for service: " + this.serviceId);
 			return new EmptyResponse();
 		}
+
+		List<ServiceInstance> filteredInstances = filterInstances(instances);
+
 		// TODO: enforce order?
 		int pos = Math.abs(this.position.incrementAndGet());
 
-		ServiceInstance instance = instances.get(pos % instances.size());
+		ServiceInstance instance = filteredInstances.get(pos % filteredInstances.size());
 
 		return new DefaultResponse(instance);
+	}
+
+	private List<ServiceInstance> filterInstances(List<ServiceInstance> instances) {
+		List<ServiceInstance> filteredInstances = instances;
+		for (LoadBalancerFilter filter : filters) {
+			filteredInstances = filter.filter(filteredInstances);
+		}
+		return filteredInstances;
 	}
 
 }
